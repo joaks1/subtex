@@ -20,6 +20,15 @@ _program_info = {
         'WARRANTY. You are free to change and redistribute it in accord with '
         'the GPL. See the GNU General Public License for more details.'),}
 
+PATH_PATTERNS = {
+            'bib_style': re.compile(r'[^%]*\\bibliographystyle.*\{([^}]*)\}.*'),
+            'input': re.compile(r'[^%]*\\input.*\{([^}]*)\}.*'),
+            'bib': re.compile(r'[^%]*\\bibliography.*\{([^}]*)\}.*'),
+            'graphic': re.compile(r'[^%]*\\includegraphics.*\{([^}]*)\}.*'),
+            'mfigure': re.compile(r'[^%]*\\mFigure.*\{([^}]*)\}.*'),
+            'sifigure': re.compile(r'[^%]*\\siFigure.*\{([^}]*)\}.*'),
+            }
+
 class LatexReference(object):
     def __init__(self,
             caption_setup=None,
@@ -71,16 +80,48 @@ def mkdr(path):
         else:
             raise
 
+def expand_path(path):
+    return os.path.abspath(os.path.realpath(os.path.expanduser(
+            os.path.expandvars(path))))
+
+def copy_latex_file(latex_path, dest_path, over_write = False,
+        strip_comments = False):
+    latex_path = expand_path(latex_path)
+    dest_path = expand_path(dest_path)
+    if os.path.isdir(dest_path):
+        dest_path = os.path.join(dest_path, os.path.basename(latex_path))
+    if os.path.exists(dest_path) and (not over_write):
+        raise Exception('Destination path {0!r} already exists'.format(
+                dest_path))
+    path_patterns = PATH_PATTERNS
+    out = open(dest_path, 'w')
+    latex_stream = open(latex_path, 'rU')
+    latex_iter = iter(latex_stream)
+    project_dir = os.path.dirname(latex_path)
+    dest_dir = os.path.dirname(dest_path)
+    for line_index, line in enumerate(latex_iter):
+        if strip_comments and line.strip().startswith('%'):
+            continue
+        new_line = line
+        for k, v in path_patterns.iteritems():
+            m = v.match(line)
+            if m:
+                raw_path =  m.groups()[0]
+                p = os.path.realpath(os.path.join(project_dir, raw_path))
+                new_path = os.path.relpath(p, dest_dir)
+                new_line = new_line.replace(raw_path, new_path)
+        out.write(new_line)
+    out.close()
+    latex_stream.close()
+
 def bundle_for_submission(latex_path, dest_dir,
         strip_comments=True,
         append_figure_names=False,
         strip_si=False):
+    latex_path = expand_path(latex_path)
+    dest_dir = expand_path(dest_dir)
     _LOG.info('Bundling latex file {0} to {1}'.format(latex_path, dest_dir))
-    path_patterns = {
-            'bib_style': re.compile(r'[^%]*\\bibliographystyle.*\{([^}]*)\}.*'),
-            'input': re.compile(r'[^%]*\\input.*\{([^}]*)\}.*'),
-            'bib': re.compile(r'[^%]*\\bibliography.*\{([^}]*)\}.*'),
-            'graphic': re.compile(r'[^%]*\\includegraphics.*\{([^}]*)\}.*'),}
+    path_patterns = PATH_PATTERNS
     si_pattern = re.compile(r'^\s*[%]+\s*supporting\s+info.*$', re.IGNORECASE)
     out_path = os.path.join(dest_dir, os.path.basename(latex_path))
     if not os.path.exists(dest_dir):
@@ -268,6 +309,9 @@ def main():
     parser.add_option("--strip-si", dest="strip_si", default=False,
             action="store_true",
             help=("Remove all supplemental material from document."))
+    parser.add_option("--cp", dest="cp", default=False,
+            action="store_true",
+            help=("Only copy the latex file and update its paths."))
     (options, args) = parser.parse_args()
 
     if options.debugging:
@@ -277,12 +321,22 @@ def main():
     else:
         _LOG.setLevel(logging.WARNING)
     
+    if options.cp:
+        if len(args) != 2:
+            _LOG.error("To copy a file, you must specify the source and "
+                    "destination path.")
+            sys.stderr.write(str(parser.print_help()))
+            sys.exit(-1)
+        copy_latex_file(args[0], args[1],
+                strip_comments = (not options.preserve_comments))
+        sys.exit(0)
+
     if len(args) != 1:
         _LOG.error("Program requires path to main latex file")
         sys.stderr.write(str(parser.print_help()))
         sys.exit(-1)
 
-    latex_path = os.path.abspath(os.path.expanduser(os.path.expandvars(args[0])))
+    latex_path = expand_path(args[0])
     project_dir = os.path.dirname(latex_path)
     submit_dir = os.path.join(project_dir, 'submit')
     paths_copied, paths_failed = bundle_for_submission(

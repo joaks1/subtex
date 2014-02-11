@@ -8,9 +8,9 @@ import re
 import shutil
 
 logging.basicConfig(level=logging.WARNING)
-_LOG = logging.getLogger("latex_submission")
+_LOG = logging.getLogger("subtex")
 _program_info = {
-    'name': 'latex_submission',
+    'name': os.path.basename(__file__),
     'author': 'Jamie Oaks',
     'version': 'Version 0.1.0',
     'copyright': 'Copyright (C) 2012 Jamie Oaks.',

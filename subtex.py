@@ -24,9 +24,10 @@ PATH_PATTERNS = {
             'bib_style': re.compile(r'[^%]*\\bibliographystyle.*\{([^}]*)\}.*'),
             'input': re.compile(r'[^%]*\\input.*\{([^}]*)\}.*'),
             'bib': re.compile(r'[^%]*\\bibliography.*\{([^}]*)\}.*'),
-            'graphic': re.compile(r'[^%]*\\includegraphics.*\{([^}]*)\}.*'),
-            'mfigure': re.compile(r'[^%]*\\mFigure.*\{([^}]*)\}.*'),
-            'sifigure': re.compile(r'[^%]*\\siFigure.*\{([^}]*)\}.*'),
+            'graphic': re.compile(r'[^%]*(?<!newcommand{)\\includegraphics.*\{([^}#]*)\}.*'),
+            'mfigure': re.compile(r'[^%]*(?<!newcommand{)\\mFigure.*\{([^}]*)\}.*'),
+            'sifigure': re.compile(r'[^%]*(?<!newcommand{)\\siFigure.*\{([^}]*)\}.*'),
+            'sisidewaysfigure': re.compile(r'[^%]*(?<!newcommand{)\\siSidewaysFigure.*\{([^}]*)\}.*'),
             }
 
 class LatexReference(object):

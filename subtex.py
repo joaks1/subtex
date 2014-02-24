@@ -21,13 +21,15 @@ _program_info = {
         'the GPL. See the GNU General Public License for more details.'),}
 
 PATH_PATTERNS = {
-            'bib_style': re.compile(r'[^%]*\\bibliographystyle.*\{([^}]*)\}.*'),
-            'input': re.compile(r'[^%]*\\input.*\{([^}]*)\}.*'),
-            'bib': re.compile(r'[^%]*\\bibliography.*\{([^}]*)\}.*'),
-            'graphic': re.compile(r'[^%]*(?<!newcommand{)\\includegraphics.*\{([^}#]*)\}.*'),
-            'mfigure': re.compile(r'[^%]*(?<!newcommand{)\\mFigure.*\{([^}]*)\}.*'),
-            'sifigure': re.compile(r'[^%]*(?<!newcommand{)\\siFigure.*\{([^}]*)\}.*'),
-            'sisidewaysfigure': re.compile(r'[^%]*(?<!newcommand{)\\siSidewaysFigure.*\{([^}]*)\}.*'),
+            'bib_style': re.compile(r'[^%]*\\bibliographystyle\{([^}]*)\}.*'),
+            'input': re.compile(r'[^%]*\\input\{([^}]*)\}.*'),
+            'bib': re.compile(r'[^%]*\\bibliography\{([^}]*)\}.*'),
+            'graphic': re.compile(r'[^%]*(?<!newcommand{)\\includegraphics\{([^}#]*)\}.*'),
+            'mfigure': re.compile(r'[^%]*(?<!newcommand{)\\mFigure\{([^}#]*)\}.*'),
+            'sifigure': re.compile(r'[^%]*(?<!newcommand{)\\siFigure\{([^}#]*)\}.*'),
+            'sisidewaysfigure': re.compile(r'[^%]*(?<!newcommand{)\\siSidewaysFigure\{([^}#]*)\}.*'),
+            'sieightfigure': re.compile(r'[^%]*(?<!newcommand{)\\siEightFigure\{([^}#]*)\}.*'),
+            'widthfigure': re.compile(r'[^%]*(?<!newcommand{)\\widthFigure\{[0-9.]*\}\{([^}#]*)\}.*'),
             }
 
 class LatexReference(object):
@@ -162,6 +164,10 @@ def bundle_for_submission(latex_path, dest_dir,
             if m:
                 raw_path =  m.groups()[0]
                 p = os.path.realpath(os.path.join(project_dir, raw_path))
+                fix_bib_ext = False
+                if (k == 'bib') and os.path.splitext(raw_path)[-1] != '.bib':
+                    fix_bib_ext = True
+                    p += '.bib'
                 if k == 'input':
                     s, f = bundle_for_submission(p, dest_dir)
                     file_name = os.path.basename(p)
@@ -174,7 +180,10 @@ def bundle_for_submission(latex_path, dest_dir,
                         figure_index += 1
                         file_name = 'figure_{0}_{1}'.format(figure_index,
                                 file_name)
-                    new_line = new_line.replace(raw_path, file_name)
+                    new_tex_path = file_name
+                    if fix_bib_ext:
+                        new_tex_path = os.path.splitext(new_tex_path)[0]
+                    new_line = new_line.replace(raw_path, new_tex_path)
                     paths_to_copy.add((p, os.path.join(dest_dir, file_name)))
         out.write(new_line)
     out.close()

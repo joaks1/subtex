@@ -283,6 +283,8 @@ def copy_files(list_of_tuples):
     paths_copied = []
     paths_failed = []
     for paths in list_of_tuples:
+        if os.path.exists(paths[1]):
+            raise Exception('Multiple files with name {0}!'.format(paths[1]))
         try:
             shutil.copyfile(paths[0], paths[1])
         except IOError, e:

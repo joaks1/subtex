@@ -115,13 +115,14 @@ where `manuscript.tex` is the main latex file used to compile the document.
 Acknowledgements
 ================
 
-This software benefited from funding provided to Jamie Oaks from the National
-Science Foundation (DEB 1011423 and DBI 1308885).
+This software benefited from funding provided to [Jamie
+Oaks](http://www.phyletica.com) from the National Science Foundation (DEB
+1011423 and DBI 1308885).
 
 License
 =======
 
-Copyright (C) 2013 Jamie Oaks
+Copyright (C) 2013 [Jamie Oaks](http://www.phyletica.com)
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

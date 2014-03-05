@@ -20,17 +20,20 @@ _program_info = {
         'WARRANTY. You are free to change and redistribute it in accord with '
         'the GPL. See the GNU General Public License for more details.'),}
 
-PATH_PATTERNS = {
-            'bib_style': re.compile(r'[^%]*\\bibliographystyle\{([^}]*)\}.*'),
-            'input': re.compile(r'[^%]*\\input\{([^}]*)\}.*'),
-            'bib': re.compile(r'[^%]*\\bibliography\{([^}]*)\}.*'),
-            'graphic': re.compile(r'[^%]*(?<!newcommand{)\\includegraphics\{([^}#]*)\}.*'),
-            'mfigure': re.compile(r'[^%]*(?<!newcommand{)\\mFigure\{([^}#]*)\}.*'),
-            'sifigure': re.compile(r'[^%]*(?<!newcommand{)\\siFigure\{([^}#]*)\}.*'),
-            'sisidewaysfigure': re.compile(r'[^%]*(?<!newcommand{)\\siSidewaysFigure\{([^}#]*)\}.*'),
-            'sieightfigure': re.compile(r'[^%]*(?<!newcommand{)\\siEightFigure\{([^}#]*)\}.*'),
-            'widthfigure': re.compile(r'[^%]*(?<!newcommand{)\\widthFigure\{[0-9.]*\}\{([^}#]*)\}.*'),
+CUSTOM_FIG_PATH_PATTERNS =  {
+            'mfigure': re.compile(r'[^%]*(?<!newcommand{)\\mFigure\{(?P<path>[^}#]*)\}.*'),
+            'sifigure': re.compile(r'[^%]*(?<!newcommand{)\\siFigure\{(?P<path>[^}#]*)\}.*'),
+            'sisidewaysfigure': re.compile(r'[^%]*(?<!newcommand{)\\siSidewaysFigure\{(?P<path>[^}#]*)\}.*'),
+            'sieightfigure': re.compile(r'[^%]*(?<!newcommand{)\\siEightFigure\{(?P<path>[^}#]*)\}.*'),
+            'widthfigure': re.compile(r'[^%]*(?<!newcommand{)\\widthFigure\{[0-9.]*\}\{(?P<path>[^}#]*)\}.*'),
             }
+PATH_PATTERNS = {
+            'bib_style': re.compile(r'[^%]*\\bibliographystyle\{(?P<path>[^}]*)\}.*'),
+            'input': re.compile(r'[^%]*\\input\{(?P<path>[^}]*)\}.*'),
+            'bib': re.compile(r'[^%]*\\bibliography\{(?P<path>[^}]*)\}.*'),
+            'graphic': re.compile(r'[^%]*(?<!newcommand{)\\includegraphics.*\{(?P<path>[^}#]*)\}.*'),
+            }
+PATH_PATTERNS.update(CUSTOM_FIG_PATH_PATTERNS)
 
 class LatexReference(object):
     def __init__(self,
@@ -109,7 +112,7 @@ def copy_latex_file(latex_path, dest_path, over_write = False,
         for k, v in path_patterns.iteritems():
             m = v.match(line)
             if m:
-                raw_path =  m.groups()[0]
+                raw_path =  m.group('path')
                 p = os.path.realpath(os.path.join(project_dir, raw_path))
                 new_path = os.path.relpath(p, dest_dir)
                 new_line = new_line.replace(raw_path, new_path)
@@ -162,7 +165,7 @@ def bundle_for_submission(latex_path, dest_dir,
         for k, v in path_patterns.iteritems():
             m = v.match(line)
             if m:
-                raw_path =  m.groups()[0]
+                raw_path =  m.group('path')
                 p = os.path.realpath(os.path.join(project_dir, raw_path))
                 fix_bib_ext = False
                 if (k == 'bib') and os.path.splitext(raw_path)[-1] != '.bib':
@@ -201,6 +204,7 @@ def parse_table_and_figure_refs(line_iter, offset=0):
         'figure': re.compile(r'[^%]*\\begin\s*\{\s*(\w*figure\w*)\s*\}.*',
                 re.IGNORECASE),
         'input': re.compile(r'[^%]*\\input.*\{([^}]*)\}.*'),}
+    header_patterns.update(CUSTOM_FIG_PATH_PATTERNS)
     attribute_patterns = {
         # 'caption_setup': re.compile(r'\\captionsetup\s*\{\s*([^}]*)\s*\}'),
         # 'caption': re.compile(r'\\caption\s*\{\s*([^}]*)\s*\}'),
@@ -225,8 +229,11 @@ def parse_table_and_figure_refs(line_iter, offset=0):
                     figures.extend(f)
                     continue
                 search_str = line
-                stop = re.compile(r'[^%]*\\end\s*\{\s*' + m.groups()[0] +
-                                  r'\s*\}.*$')
+                if CUSTOM_FIG_PATH_PATTERNS.has_key(h):
+                    stop = re.compile(r'.*\{fig[a-zA-Z0-9:-_]+\}.*')
+                else:
+                    stop = re.compile(r'[^%]*\\end\s*\{\s*' + m.groups()[0] +
+                                      r'\s*\}.*$')
                 while True:
                     try:
                         next_line = line_iter.next()
@@ -242,42 +249,72 @@ def parse_table_and_figure_refs(line_iter, offset=0):
                     if stop.match(next_line):
                         break
                 if search_str:
-                    attributes = {'caption_setup': None, 'caption': '',
-                                  'label': None}
-                    for a, a_pattern in attribute_patterns.iteritems():
-                        s = a_pattern.search(search_str)
-                        if s:
-                            attributes[a] = get_top_level_contents(
-                                    s.groups()[0])
-                    if h == 'table':
-                        tables.append(LatexTableRef(**attributes))
-                    elif h == 'figure':
+                    if CUSTOM_FIG_PATH_PATTERNS.has_key(h):
+                        fig_info = parse_custom_figure(search_str)
+                        caption_setup = fig_info.get('caption_setup', None)
+                        if caption_setup is None:
+                            if h.startswith('si'):
+                                caption_setup = 'name=Figure S, labelformat=noSpace, listformat=sFigList'
+                            else:
+                                caption_setup = 'listformat=FigList'
+                        attributes = {'caption_setup': caption_setup,
+                                      'caption': fig_info.get('caption', ''),
+                                      'label': fig_info.get('label', None)}
                         figures.append(LatexFigureRef(**attributes))
                     else:
-                        raise Exception('problem parsing {0}'.format(
-                                line.strip()))
+                        attributes = {'caption_setup': None, 'caption': '',
+                                      'label': None}
+                        for a, a_pattern in attribute_patterns.iteritems():
+                            s = a_pattern.search(search_str)
+                            if s:
+                                attributes[a] = get_top_level_contents(
+                                        s.groups()[0])
+                        if h == 'table':
+                            tables.append(LatexTableRef(**attributes))
+                        elif h == 'figure':
+                            figures.append(LatexFigureRef(**attributes))
+                        else:
+                            raise Exception('problem parsing {0}'.format(
+                                    line.strip()))
     return tables, figures
 
 def get_top_level_contents(string, start='{', end='}'):
+    content_iter = top_level_content_iter(string = string,
+            start = start,
+            end = end)
+    try:
+        return content_iter.next()
+    except StopIteration:
+        return None
+
+def top_level_content_iter(string, start='{', end='}'):
     delim = re.compile('([' + start + end + '])')
     start_index = string.find(start)
     nested_level = 0
     if start_index == -1:
-        return None
-    search_index = start_index + 1
-    while True:
-        s = delim.search(string[search_index:])
-        if not s:
-            return None
+        return
+    search_index = None
+    for s in delim.finditer(string[start_index:]):
         d = s.groups()[0]
-        delim_index = string.find(d, search_index)
+        delim_index = s.start() + start_index
         if d == start:
             nested_level += 1
+            if nested_level == 1:
+                search_index = delim_index
         else:
             nested_level -= 1
-        if nested_level < 0:
-            return string[start_index + 1: delim_index]
-        search_index = delim_index + 1
+            if nested_level == 0:
+                yield string[search_index + 1: delim_index]
+
+def parse_custom_figure(string):
+    fields = list(top_level_content_iter(string))
+    if len(fields) == 3:
+        return dict(zip(['path', 'caption', 'label'], fields))
+    elif len(fields) == 5:
+        return dict(zip(['size', 'path', 'caption_setup', 'caption', 'label'], fields))
+    else:
+        raise Exception('could not parse custom figure string '
+                '{0!r}'.format(string))
 
 def copy_files(list_of_tuples):
     paths_copied = []

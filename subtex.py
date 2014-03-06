@@ -25,16 +25,19 @@ class LatexReference(object):
     def __init__(self,
             caption_setup=None,
             caption='',
-            label=None):
+            label=None,
+            exclude_caption_setup = False):
         self.caption_setup = caption_setup
         self.caption = caption
         self.label = label
+        self.exclude_caption_setup = exclude_caption_setup
 
     def to_string(self, indent='    '):
         s = ''
-        if self.caption_setup:
-            s += '{0}\\captionsetup{{{1}}}\n'.format(indent, self.caption_setup)
-        s += '{0}\\captionsetup{{list=no,singlelinecheck=off}}\n'.format(indent)
+        if not self.exclude_caption_setup:
+            if self.caption_setup:
+                s += '{0}\\captionsetup{{{1}}}\n'.format(indent, self.caption_setup)
+            s += '{0}\\captionsetup{{list=no,singlelinecheck=off}}\n'.format(indent)
         s += '{0}\\caption{{{1}}}\n'.format(indent, self.caption)
         if self.label:
             s += '{0}\\label{{{1}}}\n'.format(indent, self.label)
@@ -72,7 +75,7 @@ class SubmissionBundler(object):
                 'bib_style': re.compile(r'[^%]*\\bibliographystyle\{(?P<path>[^}]*)\}.*'),
                 'input': re.compile(r'[^%]*\\input\{(?P<path>[^}]*)\}.*'),
                 'bib': re.compile(r'[^%]*\\bibliography\{(?P<path>[^}]*)\}.*'),
-                'graphic': re.compile(r'[^%]*(?<!newcommand{)\\includegraphics.*\{(?P<path>[^}#]*)\}.*'),
+                'graphic': re.compile(r'[^%]*(?<!newcommand{)(?<!def)\\includegraphics.*\{(?P<path>[^}#]*)\}.*'),
                 }
     path_patterns.update(custom_fig_path_patterns)
     header_patterns = {
@@ -88,12 +91,14 @@ class SubmissionBundler(object):
         'label': re.compile(r'\\caption\s*\[*\s*\]*\s*\{.*\\label\s*(\{.*)',
                 re.DOTALL),}
     si_pattern = re.compile(r'^\s*[%]+\s*supporting\s+info.*$', re.IGNORECASE)
+    caption_setup_pattern = re.compile(r'[^%]*(?<!newcommand{)(?<!def)\\captionsetup.*\{[^}#]*\}.*')
 
     def __init__(self, latex_path, dest_dir,
             strip_comments = True,
             append_figure_names = False,
             strip_si = False,
             strip_figures = False,
+            exclude_caption_setup = False,
             merge = False):
         self.latex_path = expand_path(latex_path)
         self.dest_dir = expand_path(dest_dir)
@@ -104,6 +109,7 @@ class SubmissionBundler(object):
         self.append_figure_names = append_figure_names
         self.strip_si = strip_si
         self.strip_figures = strip_figures
+        self.exclude_caption_setup = exclude_caption_setup
         self.figure_index = 0
         self.si_started = False
         self.merge = merge
@@ -159,25 +165,26 @@ class SubmissionBundler(object):
             if self.si_pattern.match(line):
                 self.si_started = True
                 self.figure_index = 0
+                out.write('\\clearpage\n')
+                out.write('\\setcounter{table}{0}\n')
+                out.write('\\setcounter{figure}{0}\n')
                 if self.strip_si:
                     tables, figs = self.parse_table_and_figure_refs(latex_iter, line_index)
                     if tables:
-                        out.write('\\clearpage\n')
                         out.write('\\section*{SI Table Captions}\n')
-                        out.write('\\setcounter{table}{0}\n')
-                        for tl in sublist(tables, 5):
+                        for tl in sublist(tables, 18):
                             out.write('{0}\n'.format('\n'.join([str(x) for x in tl])))
                             out.write('\\clearpage\n')
                     if figs:
-                        out.write('\\clearpage\n')
                         out.write('\\section*{SI Figure Captions}\n')
-                        out.write('\\setcounter{figure}{0}\n')
-                        for fl in sublist(figs, 5):
+                        for fl in sublist(figs, 18):
                             out.write('{0}\n'.format('\n'.join([str(x) for x in fl])))
                             out.write('\\clearpage\n')
                     out.write('\\end{document}\n')
                     break
             if self.strip_comments and line.strip().startswith('%'):
+                continue
+            if self.exclude_caption_setup and self.caption_setup_pattern.match(line):
                 continue
             new_line = line
             for k, v in self.path_patterns.iteritems():
@@ -202,11 +209,13 @@ class SubmissionBundler(object):
                             file_name = '{0}{1}'.format(self.get_figure_prefix(),
                                     file_name)
                             if self.strip_figures:
-                                ref = self.finish_parsing_ref(latex_iter,
-                                        pattern_key = k,
-                                        pattern_line = line,
-                                        offset = line_index)
-                                out.write('{0}\n'.format(str(ref)))
+                                if k != 'graphic':
+                                    ref = self.finish_parsing_ref(latex_iter,
+                                            pattern_key = k,
+                                            pattern_line = line,
+                                            pattern_match = m,
+                                            offset = line_index)
+                                    out.write('{0}\n'.format(str(ref)))
                                 write_line = False
                         new_tex_path = file_name
                         if fix_bib_ext:
@@ -261,6 +270,7 @@ class SubmissionBundler(object):
                     ref = self.finish_parsing_ref(line_iter,
                             pattern_key = h,
                             pattern_line = line,
+                            pattern_match = m,
                             offset = line_index + offset)
                     if isinstance(ref, LatexTableRef):
                         tables.append(ref)
@@ -269,15 +279,16 @@ class SubmissionBundler(object):
         return tables, figures
     
     def finish_parsing_ref(self, line_iter, pattern_key, pattern_line,
+            pattern_match,
             offset = 0):
-        assert((pattern_key in self.header_patterns) and
+        assert((pattern_key in self.header_patterns.keys()) and
                 (pattern_key != 'input'))
         search_str = pattern_line
         line_index = 0
         if self.custom_fig_path_patterns.has_key(pattern_key):
             stop = re.compile(r'.*(?<!ref)\{fig[a-zA-Z0-9:-_]+\}.*')
         else:
-            stop = re.compile(r'[^%]*\\end\s*\{\s*' + m.groups()[0] +
+            stop = re.compile(r'[^%]*\\end\s*\{\s*' + pattern_match.groups()[0] +
                               r'\s*\}.*$')
         while True:
             try:
@@ -305,11 +316,14 @@ class SubmissionBundler(object):
                         caption_setup = 'listformat=figList'
                 attributes = {'caption_setup': caption_setup,
                               'caption': fig_info.get('caption', ''),
-                              'label': fig_info.get('label', None)}
+                              'label': fig_info.get('label', None),
+                              'exclude_caption_setup': self.exclude_caption_setup}
                 return LatexFigureRef(**attributes)
             else:
-                attributes = {'caption_setup': None, 'caption': '',
-                              'label': None}
+                attributes = {'caption_setup': None,
+                              'caption': '',
+                              'label': None,
+                              'exclude_caption_setup': self.exclude_caption_setup}
                 for a, a_pattern in self.attribute_patterns.iteritems():
                     s = a_pattern.search(search_str)
                     if s:
@@ -330,7 +344,6 @@ class SubmissionBundler(object):
         elif len(fields) == 5:
             return dict(zip(['size', 'path', 'caption_setup', 'caption', 'label'], fields))
         else:
-            print fields
             raise Exception('could not parse custom figure string '
                     '{0!r}'.format(string))
 
@@ -437,6 +450,10 @@ def main():
     parser.add_option("--strip-figures", dest="strip_figures", default=False,
             action="store_true",
             help=("Remove figures from document; only include captions."))
+    parser.add_option("--exclude-caption-setup", dest="exclude_caption_setup",
+            default=False,
+            action="store_true",
+            help=("Do not include `captionsetup` calls."))
     parser.add_option("--merge", dest="merge",
             default=False,
             action="store_true",
@@ -484,6 +501,7 @@ def main():
             append_figure_names = options.append_figure_names,
             strip_si = options.strip_si,
             strip_figures = options.strip_figures,
+            exclude_caption_setup = options.exclude_caption_setup,
             merge = options.merge)
     paths_copied, paths_failed = bundler.bundle()
     if paths_copied:

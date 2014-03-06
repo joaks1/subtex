@@ -209,12 +209,13 @@ class SubmissionBundler(object):
                             file_name = '{0}{1}'.format(self.get_figure_prefix(),
                                     file_name)
                             if self.strip_figures:
-                                ref = self.finish_parsing_ref(latex_iter,
-                                        pattern_key = k,
-                                        pattern_line = line,
-                                        pattern_match = m,
-                                        offset = line_index)
-                                out.write('{0}\n'.format(str(ref)))
+                                if k != 'graphic':
+                                    ref = self.finish_parsing_ref(latex_iter,
+                                            pattern_key = k,
+                                            pattern_line = line,
+                                            pattern_match = m,
+                                            offset = line_index)
+                                    out.write('{0}\n'.format(str(ref)))
                                 write_line = False
                         new_tex_path = file_name
                         if fix_bib_ext:

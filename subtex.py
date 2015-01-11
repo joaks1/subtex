@@ -72,6 +72,7 @@ class SubmissionBundler(object):
                 'widthfigure': re.compile(r'[^%]*(?<!newcommand{)\\widthFigure\{[0-9.]*\}\{(?P<path>[^}#]*)\}.*'),
                 }
     path_patterns = {
+                'documentclass': re.compile(r'[^%]*\\documentclass\[?.*\]?\{(?P<path>[^}]*)\}.*'),
                 'bib_style': re.compile(r'[^%]*\\bibliographystyle\{(?P<path>[^}]*)\}.*'),
                 'input': re.compile(r'[^%]*\\input\{(?P<path>[^}]*)\}.*'),
                 'bib': re.compile(r'[^%]*\\bibliography\{(?P<path>[^}]*)\}.*'),
@@ -193,9 +194,17 @@ class SubmissionBundler(object):
                     raw_path =  m.group('path')
                     p = os.path.realpath(os.path.join(project_dir, raw_path))
                     fix_bib_ext = False
+                    fix_bst_ext = False
+                    fix_cls_ext = False
                     if (k == 'bib') and os.path.splitext(raw_path)[-1] != '.bib':
                         fix_bib_ext = True
                         p += '.bib'
+                    elif (k == 'bib_style') and os.path.splitext(raw_path)[-1] != '.bst':
+                        fix_bst_ext = True
+                        p += '.bst'
+                    elif (k == 'documentclass') and os.path.splitext(raw_path)[-1] != '.cls':
+                        fix_cls_ext = True
+                        p += '.cls'
                     if k == 'input':
                         self._bundle(p)
                         file_name = os.path.basename(p)
@@ -218,12 +227,14 @@ class SubmissionBundler(object):
                                     out.write('{0}\n'.format(str(ref)))
                                 write_line = False
                         new_tex_path = file_name
-                        if fix_bib_ext:
+                        if fix_bib_ext or fix_bst_ext or fix_cls_ext:
                             new_tex_path = os.path.splitext(new_tex_path)[0]
                         if write_line:
                             new_line = new_line.replace(raw_path, new_tex_path)
                         else:
                             new_line = ''
+                        if (k == 'documentclass') and (not os.path.exists(p)):
+                            break
                         paths_to_copy.add((p, os.path.join(self.dest_dir, file_name)))
                     break
             out.write(new_line)

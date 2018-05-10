@@ -70,6 +70,7 @@ class SubmissionBundler(object):
                 'sisidewaysfigure': re.compile(r'[^%]*(?<!newcommand{)\\siSidewaysFigure\{(?P<path>[^}#]*)\}.*'),
                 'sieightfigure': re.compile(r'[^%]*(?<!newcommand{)\\siEightFigure\{(?P<path>[^}#]*)\}.*'),
                 'widthfigure': re.compile(r'[^%]*(?<!newcommand{)\\widthFigure\{[0-9.]*\}\{(?P<path>[^}#]*)\}.*'),
+                'embedfigure': re.compile(r'[^%]*(?<!newcommand{)\\embedFigure\{(?P<path>[^}#]*)\}.*'),
                 }
     path_patterns = {
                 'documentclass': re.compile(r'[^%]*\\documentclass\[?.*\]?\{(?P<path>[^}]*)\}.*'),

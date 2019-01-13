@@ -66,11 +66,17 @@ class LatexTableRef(LatexReference):
 class SubmissionBundler(object):
     custom_fig_path_patterns =  {
                 'mfigure': re.compile(r'[^%]*(?<!newcommand{)\\mFigure\{(?P<path>[^}#]*)\}.*'),
-                'sifigure': re.compile(r'[^%]*(?<!newcommand{)\\siFigure\{(?P<path>[^}#]*)\}.*'),
+                'sirasterizedfigure': re.compile(r'[^%]*(?<!newcommand{)\\siFigure\{\\ifuserasterizedplotsinsi\{(?P<rasterizedpath>[^}#]*)}\{(?P<path>[^}#]*)\}.*'),
+                'sifigure': re.compile(r'[^%]*(?<!newcommand{)\\siFigure\{(?!\\ifuserast)(?P<path>[^}#]*)\}.*'),
                 'sisidewaysfigure': re.compile(r'[^%]*(?<!newcommand{)\\siSidewaysFigure\{(?P<path>[^}#]*)\}.*'),
                 'sieightfigure': re.compile(r'[^%]*(?<!newcommand{)\\siEightFigure\{(?P<path>[^}#]*)\}.*'),
                 'widthfigure': re.compile(r'[^%]*(?<!newcommand{)\\widthFigure\{[0-9.]*\}\{(?P<path>[^}#]*)\}.*'),
                 'embedfigure': re.compile(r'[^%]*(?<!newcommand{)\\embedFigure\{(?P<path>[^}#]*)\}.*'),
+                'embedwidthrasterizedfigure': re.compile(r'[^%]*(?<!newcommand{)\\embedWidthFigure\{[0-9.]*\}\{\\ifuserasterizedplots\{(?P<rasterizedpath>[^}#]*)}\{(?P<path>[^}#]*)\}.*'),
+                'embedwidthfigure': re.compile(r'[^%]*(?<!newcommand{)\\embedWidthFigure\{[0-9.]*\}\{(?!\\ifuserast)(?P<path>[^}#]*)\}.*'),
+                'embedheightrasterizedfigure': re.compile(r'[^%]*(?<!newcommand{)\\embedHeightFigure\{[0-9.]*\}\{\\ifuserasterizedplots\{(?P<rasterizedpath>[^}#]*)}\{(?P<path>[^}#]*)\}.*'),
+                'embedheightfigure': re.compile(r'[^%]*(?<!newcommand{)\\embedHeightFigure\{[0-9.]*\}\{(?!\\ifuserast)(?P<path>[^}#]*)\}.*'),
+                'embedappendixfigure': re.compile(r'[^%]*(?<!newcommand{)\\embedAppendixFigure\{(?P<path>[^}#]*)\}.*'),
                 }
     path_patterns = {
                 'documentclass': re.compile(r'[^%]*\\documentclass\[?.*\]?\{(?P<path>[^}]*)\}.*'),
@@ -94,6 +100,7 @@ class SubmissionBundler(object):
                 re.DOTALL),}
     si_pattern = re.compile(r'^\s*[%]+\s*supporting\s+info.*$', re.IGNORECASE)
     caption_setup_pattern = re.compile(r'[^%]*(?<!newcommand{)(?<!def)\\captionsetup.*\{[^}#]*\}.*')
+    processed_graphics_paths = {}
 
     def __init__(self, latex_path, dest_dir,
             strip_comments = True,
@@ -194,6 +201,10 @@ class SubmissionBundler(object):
                 if m:
                     raw_path =  m.group('path')
                     p = os.path.realpath(os.path.join(project_dir, raw_path))
+                    raw_rasterized_path = m.groupdict().get('rasterizedpath', None)
+                    rp = None
+                    if raw_rasterized_path:
+                        rp = os.path.realpath(os.path.join(project_dir, raw_rasterized_path))
                     fix_bib_ext = False
                     fix_bst_ext = False
                     fix_cls_ext = False
@@ -214,9 +225,31 @@ class SubmissionBundler(object):
                             new_line = ''
                     else:
                         write_line = True
+                        skip_copy = (p in self.processed_graphics_paths)
+                        skip_rasterized_copy = (rp in self.processed_graphics_paths)
                         file_name = os.path.basename(p)
+                        rasterized_file_name = None
+                        if rp:
+                            rasterized_file_name = os.path.basename(rp)
                         if self.is_graphic_key(k):
-                            file_name = '{0}{1}'.format(self.get_figure_prefix(),
+                            if p in self.processed_graphics_paths:
+                                fig_prefix = self.processed_graphics_paths[p]['new_tex_path_prefix']
+                            elif rp  and (rp in self.processed_graphics_paths):
+                                fig_prefix = self.processed_graphics_paths[rp]['new_tex_path_prefix']
+                            else:
+                                fig_prefix = self.get_figure_prefix()
+                                self.processed_graphics_paths[p] = {
+                                        'new_tex_path_prefix': fig_prefix,
+                                        }
+                                if rp:
+                                    self.processed_graphics_paths[rp] = {
+                                            'new_tex_path_prefix': fig_prefix,
+                                            }
+                            if rp:
+                                rasterized_file_name = '{0}r_{1}'.format(
+                                        fig_prefix,
+                                        rasterized_file_name)
+                            file_name = '{0}{1}'.format(fig_prefix,
                                     file_name)
                             if self.strip_figures:
                                 if k != 'graphic':
@@ -228,15 +261,23 @@ class SubmissionBundler(object):
                                     out.write('{0}\n'.format(str(ref)))
                                 write_line = False
                         new_tex_path = file_name
+                        new_rasterized_tex_path = rasterized_file_name
                         if fix_bib_ext or fix_bst_ext or fix_cls_ext:
                             new_tex_path = os.path.splitext(new_tex_path)[0]
                         if write_line:
                             new_line = new_line.replace(raw_path, new_tex_path)
+                            if rp:
+                                new_line = new_line.replace(
+                                        raw_rasterized_path,
+                                        rasterized_file_name)
                         else:
                             new_line = ''
                         if (k == 'documentclass') and (not os.path.exists(p)):
                             break
-                        paths_to_copy.add((p, os.path.join(self.dest_dir, file_name)))
+                        if not skip_copy:
+                            paths_to_copy.add((p, os.path.join(self.dest_dir, file_name)))
+                        if rp and (not skip_rasterized_copy):
+                            paths_to_copy.add((rp, os.path.join(self.dest_dir, rasterized_file_name)))
                     break
             out.write(new_line)
         if out != self.out_stream:
@@ -298,7 +339,7 @@ class SubmissionBundler(object):
         search_str = pattern_line
         line_index = 0
         if self.custom_fig_path_patterns.has_key(pattern_key):
-            stop = re.compile(r'.*(?<!ref)\{fig[a-zA-Z0-9:-_]+\}.*')
+            stop = re.compile(r'.*(?<!ref|\{S\})(?<!\{\})\{fig[a-zA-Z0-9:-_]+\}.*')
         else:
             stop = re.compile(r'[^%]*\\end\s*\{\s*' + pattern_match.groups()[0] +
                               r'\s*\}.*$')

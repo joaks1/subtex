@@ -110,6 +110,7 @@ class SubmissionBundler(object):
             exclude_caption_setup = False,
             merge = False):
         self.latex_path = expand_path(latex_path)
+        self.latex_dir = os.path.dirname(self.latex_path)
         self.dest_dir = expand_path(dest_dir)
         if not os.path.exists(self.dest_dir):
             mkdr(self.dest_dir)
@@ -200,7 +201,8 @@ class SubmissionBundler(object):
                 m = v.match(line)
                 if m:
                     raw_path =  m.group('path')
-                    p = os.path.realpath(os.path.join(project_dir, raw_path))
+                    # p = os.path.realpath(os.path.join(project_dir, raw_path))
+                    p = os.path.realpath(os.path.join(self.latex_dir, raw_path))
                     raw_rasterized_path = m.groupdict().get('rasterizedpath', None)
                     rp = None
                     if raw_rasterized_path:

@@ -65,9 +65,11 @@ class LatexTableRef(LatexReference):
 
 class SubmissionBundler(object):
     custom_fig_path_patterns =  {
-                'mfigure': re.compile(r'[^%]*(?<!newcommand{)\\mFigure\{(?P<path>[^}#]*)\}.*'),
+                'mfigureflex': re.compile(r'[^%]*(?<!newcommand{)\\mFigure\{[0-9.]+\}\{(?P<path>[^}#]*)\}.*'),
+                'mfigure': re.compile(r'[^%]*(?<!newcommand{)\\mFigure(?!\{[0-9.]+\})\{(?P<path>[^}#]*)\}.*'),
                 'sirasterizedfigure': re.compile(r'[^%]*(?<!newcommand{)\\siFigure\{\\ifuserasterizedplotsinsi\{(?P<rasterizedpath>[^}#]*)}\{(?P<path>[^}#]*)\}.*'),
-                'sifigure': re.compile(r'[^%]*(?<!newcommand{)\\siFigure\{(?!\\ifuserast)(?P<path>[^}#]*)\}.*'),
+                'sifigureflex': re.compile(r'[^%]*(?<!newcommand{)\\siFigure\{[0-9.]+\}\{(?!\\ifuserast)(?P<path>[^}#]*)\}.*'),
+                'sifigure': re.compile(r'[^%]*(?<!newcommand{)\\siFigure(?!\{[0-9.]+\})\{(?!\\ifuserast)(?P<path>[^}#]*)\}.*'),
                 'sisidewaysfigure': re.compile(r'[^%]*(?<!newcommand{)\\siSidewaysFigure\{(?P<path>[^}#]*)\}.*'),
                 'sieightfigure': re.compile(r'[^%]*(?<!newcommand{)\\siEightFigure\{(?P<path>[^}#]*)\}.*'),
                 'widthfigure': re.compile(r'[^%]*(?<!newcommand{)\\widthFigure\{[0-9.]*\}\{(?P<path>[^}#]*)\}.*'),
@@ -201,6 +203,7 @@ class SubmissionBundler(object):
                 m = v.match(line)
                 if m:
                     raw_path =  m.group('path')
+                    _LOG.info('Matched path \'{0}\' with pattern \'{1}\'.'.format(raw_path, k))
                     # p = os.path.realpath(os.path.join(project_dir, raw_path))
                     p = os.path.realpath(os.path.join(self.latex_dir, raw_path))
                     raw_rasterized_path = m.groupdict().get('rasterizedpath', None)

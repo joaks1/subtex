@@ -401,6 +401,8 @@ class SubmissionBundler(object):
             return dict(zip(['path', 'caption', 'label'], fields))
         elif len(fields) == 5:
             return dict(zip(['size', 'path', 'caption_setup', 'caption', 'label'], fields))
+        elif len(fields) == 4:
+            return dict(zip(['size', 'path', 'caption', 'label'], fields))
         else:
             raise Exception('could not parse custom figure string '
                     '{0!r}'.format(string))
